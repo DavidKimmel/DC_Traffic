@@ -1,0 +1,94 @@
+/* Global Styles */
+
+html, body {
+    height: 100%;
+    margin: 0;
+    padding: 0;
+  }
+  
+  /* If you want the entire dashboard row to fill the viewport height minus header */
+  .row.full-height {
+    height: calc(100vh - 120px); /* adjust 120px to account for header height and margins */
+  }
+  
+  /* Map container fills its column */
+  #mapContainer, #map {
+    height: 100%;
+  }
+  
+  /* Header Styling */
+  header {
+    background-color: #fff;
+    padding: 10px;
+    margin-bottom: 10px;
+    border-bottom: 2px solid #ddd;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  }
+  header h1 {
+    font-size: 2em;
+    color: #2c3e50;
+  }
+  
+  /* Map Container Styling */
+  #mapContainer {
+    padding: 10px;
+    background-color: #fff;
+    border: 1px solid #ddd;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+    margin-bottom: 20px;
+  }
+  
+  /* Dashboard Column Styling */
+  #dashboard {
+    padding: 0;
+  }
+  
+  /* Card Styling for Dashboard Elements */
+  .card {
+    background-color: #fff;
+    padding: 15px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    margin-bottom: 20px;
+  }
+  
+  /* Filter Controls Styling */
+  #filters {
+    background-color: #fafafa;
+  }
+  #filters label {
+    font-weight: 600;
+    margin-right: 10px;
+  }
+  #filters select,
+  #filters input[type="checkbox"] {
+    margin-right: 15px;
+  }
+  
+  /* Ensure Charts Fit Their Container */
+  #donutChart, #barChart {
+    width: 100%;
+    min-height: 250px;
+  }
+  
+  /* Tooltip Styling for D3 Charts */
+  .donut-tooltip, .bar-tooltip {
+    font-size: 12px;
+    line-height: 1.4;
+    position: absolute;
+    pointer-events: none;
+    padding: 6px;
+    background: rgba(0, 0, 0, 0.7);
+    color: #fff;
+    border-radius: 4px;
+  }
+  
+  /* Optional: Cluster Marker Styling */
+  .leaflet-marker-icon.marker-cluster div {
+    transition: transform 0.2s ease;
+    transform-origin: center;
+  }
+  .leaflet-marker-icon.marker-cluster:hover div {
+    transform: scale(1.5);
+  }

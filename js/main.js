@@ -1,5 +1,5 @@
 document.addEventListener('DOMContentLoaded', function () {
-  // Initialize the Leaflet map centered on Washington, DC at zoom 13
+  // Initialize the Leaflet map centered on Washington, DC at zoom 12
   var initialCenter = [38.9072, -77.0369];
   var initialZoom = 12;
   var map = L.map('map').setView(initialCenter, initialZoom);
@@ -7,30 +7,33 @@ document.addEventListener('DOMContentLoaded', function () {
   // Save the original view for resetting
   var originalCenter = initialCenter;
   var originalZoom = initialZoom;
-
-  // Add the OpenStreetMap tile layer
+  
+  // Crash Icon
+  var crashIcon = L.icon({
+    iconUrl: 'img/crash.png',  // update the path as needed
+    iconSize: [40, 50],
+    iconAnchor: [15, 15],
+    popupAnchor: [0, -15]
+  });
+  
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
     maxZoom: 19,
     attribution: '© OpenStreetMap'
   }).addTo(map);
-
+  
   // Create custom panes for layering
   map.createPane('polygonsPane');
-  map.getPane('polygonsPane').style.zIndex = 420; // Lower pane for ward polygons
-
+  map.getPane('polygonsPane').style.zIndex = 320;
   map.createPane('markersPane');
-  map.getPane('markersPane').style.zIndex = 650; // Higher pane for crash markers
-
-  // Global variables for CSV data, marker layer, and full year list (excluding 2018)
+  map.getPane('markersPane').style.zIndex = 650;
+  
   var csvData = [];
-  var geoLayer;
-  var allYears = [];  
-
-  // Create a container for filter controls and add to #controls
-  var controlsDiv = document.getElementById("controls");
-  var filterDiv = document.createElement("div");
-  filterDiv.id = "filters";
-  filterDiv.innerHTML = `
+  var markersCluster;
+  var allYears = [];
+  
+  // Render filter controls into the existing #filters container
+  var filtersDiv = document.getElementById("filters");
+  filtersDiv.innerHTML = `
     <label for="yearFilter">Select Year:</label>
     <select id="yearFilter"><option value="">-- All --</option></select>
     &nbsp;&nbsp;
@@ -50,32 +53,23 @@ document.addEventListener('DOMContentLoaded', function () {
     &nbsp;&nbsp;
     <label><input type="checkbox" id="bicyclistFilter"> Bicyclist Involved</label>
     &nbsp;&nbsp;
-    <br/><br/>
   `;
-  controlsDiv.insertBefore(filterDiv, controlsDiv.firstChild);
-
-  // Get references to filter elements
+  
   var selectYear = document.getElementById("yearFilter");
   var selectWard = document.getElementById("wardFilter");
   var checkboxFatalities = document.getElementById("fatalityFilter");
   var checkboxPedestrians = document.getElementById("pedestrianFilter");
   var checkboxBicyclists = document.getElementById("bicyclistFilter");
   var selectInjury = document.getElementById("injuryFilter");
-
-  // Load CSV data using D3
+  
   d3.csv("data/crash.csv").then(function(data) {
     csvData = data;
-
-    // Extract the year from the DATE field (first 4 characters)
     csvData.forEach(function(d) {
       d.year = d.DATE.substring(0, 4);
     });
     // Filter out records from 2018
-    csvData = csvData.filter(function(d) {
-      return d.year !== "2018";
-    });
-
-    // Populate the Year filter and store complete year list in allYears
+    csvData = csvData.filter(function(d) { return d.year !== "2018"; });
+    
     var years = new Set(csvData.map(function(d) { return d.year; }));
     allYears = Array.from(years).sort();
     allYears.forEach(function(year) {
@@ -84,8 +78,7 @@ document.addEventListener('DOMContentLoaded', function () {
       option.textContent = year;
       selectYear.appendChild(option);
     });
-
-    // Populate the Ward filter (exclude "Unknown" and "Null")
+    
     var wards = new Set(
       csvData
         .map(function(d) { return d.WARD; })
@@ -100,179 +93,109 @@ document.addEventListener('DOMContentLoaded', function () {
       option.textContent = ward;
       selectWard.appendChild(option);
     });
-
-    // Optionally, set a default filter (e.g., default to year 2025 if available)
-    if (years.has("2025")) {
-      selectYear.value = "2025";
-    }
-
-    // Initial update of the map with default filter values
+    
+    // Optionally set a default year (if desired)
+    if (years.has("2025")) { selectYear.value = "2025"; }
     updateMap();
   }).catch(function(error) {
     console.error("Error loading CSV data:", error);
   });
-
-  // Load ward polygons from wards.geojson and add interactive behavior
+  
   d3.json("data/wards.geojson").then(function(wardsData) {
     L.geoJSON(wardsData, {
-      pane: 'polygonsPane', // Add polygons to lower pane
+      pane: 'polygonsPane',
       style: function(feature) {
         return {
           color: "blue",
-          weight: 0,
-          fill: true,       // Enable fill so mouse events are captured
-          fillOpacity: 0    // But keep fill transparent
+          weight: 2,
+          fill: false,
+          fillOpacity: 0
         };
-      },
-      onEachFeature: function(feature, layer) {
-        layer.on({
-          mouseover: function(e) {
-            // On mouseover, change stroke to red, increase weight, and move to markers pane
-            layer.setStyle({ weight: 3, color: "yellow" });
-            layer.setPane('markersPane');
-          },
-          mouseout: function(e) {
-            // On mouseout, revert stroke to blue, weight to 1, and move back to polygons pane
-            layer.setStyle({ weight: 0, color: "blue" });
-            layer.setPane('polygonsPane');
-          },
-          click: function(e) {
-            var wardName = feature.properties.WARD;
-            if (wardName) {
-              selectWard.value = wardName;
-              updateMap();
-              if (layer.getBounds && layer.getBounds().isValid()) {
-                map.fitBounds(layer.getBounds());
-              } else {
-                map.setView(e.latlng, 18);
-              }
-            }
-          }
-        });
       }
     }).addTo(map);
   }).catch(function(error) {
     console.error("Error loading ward polygons:", error);
   });
-
-  // Custom Leaflet control for Reset Map added as a button on the map
+  
   var ResetControl = L.Control.extend({
-    options: {
-      position: 'topright'
-    },
+    options: { position: 'topright' },
     onAdd: function(map) {
       var container = L.DomUtil.create('div', 'leaflet-bar reset-control');
       container.style.backgroundColor = 'white';
       container.style.padding = '5px';
       container.style.cursor = 'pointer';
       container.innerHTML = 'Reset Zoom';
-
       L.DomEvent.on(container, 'click', function(e) {
         L.DomEvent.stopPropagation(e);
         L.DomEvent.preventDefault(e);
         map.setView(originalCenter, originalZoom);
       });
-
       return container;
     }
   });
   map.addControl(new ResetControl());
-
-  // Function to update the map based on the selected filters
+  
   function updateMap() {
-    // Remove existing marker layer if it exists
-    if (geoLayer) {
-      map.removeLayer(geoLayer);
-    }
-
-    // Get current filter values
-    var selectedYear = selectYear.value;
-    var selectedWard = selectWard.value;
+    if (markersCluster) { map.removeLayer(markersCluster); }
+    
+    var selectedYearVal = selectYear.value;
+    var selectedWardVal = selectWard.value;
     var fatalitiesOnly = checkboxFatalities.checked;
     var pedestrianOnly = checkboxPedestrians.checked;
     var bicyclistOnly = checkboxBicyclists.checked;
-    var injurySeverity = selectInjury.value; // "all", "high", "low", "none"
-
-    // Filter CSV data for the map (including the year filter)
+    var injurySeverity = selectInjury.value;
+    
+    // Filter for the map (includes year filter)
     var filteredMapData = csvData.filter(function(d) {
-      if (selectedYear && d.year !== selectedYear) return false;
-      if (selectedWard && d.WARD !== selectedWard) return false;
+      if (selectedYearVal && d.year !== selectedYearVal) return false;
+      if (selectedWardVal && d.WARD !== selectedWardVal) return false;
       if (fatalitiesOnly) {
-        var totalFatal = (parseFloat(d.FATAL_DRIVER) || 0) +
-                         (parseFloat(d.FATAL_PEDESTRIAN) || 0) +
-                         (parseFloat(d.FATAL_BICYCLIST) || 0);
+        var totalFatal = (+d.FATAL_DRIVER || 0) + (+d.FATAL_PEDESTRIAN || 0) + (+d.FATAL_BICYCLIST || 0);
         if (totalFatal === 0) return false;
       }
-      if (pedestrianOnly && (parseFloat(d.TOTAL_PEDESTRIANS) || 0) === 0) return false;
-      if (bicyclistOnly && (parseFloat(d.TOTAL_PEDESTRIQUES) || parseFloat(d.TOTAL_BICYCLES) || 0) === 0) return false;
+      if (pedestrianOnly && (+d.TOTAL_PEDESTRIANS || 0) === 0) return false;
+      if (bicyclistOnly && ((+d.TOTAL_PEDESTRIQUES) || (+d.TOTAL_BICYCLES) || 0) === 0) return false;
       if (injurySeverity !== "all") {
-        var majorInjuries = (parseFloat(d.MAJORINJURIES_DRIVER) || 0) +
-                            (parseFloat(d.MAJORINJURIES_PEDESTRIAN) || 0) +
-                            (parseFloat(d.MAJORINJURIES_BICYCLIST) || 0);
-        var minorInjuries = (parseFloat(d.MINORINJURIES_DRIVER) || 0) +
-                            (parseFloat(d.MINORINJURIES_PEDESTRIAN) || 0) +
-                            (parseFloat(d.MINORINJURIES_BICYCLIST) || 0);
+        var majorInjuries = (+d.MAJORINJURIES_DRIVER || 0) + (+d.MAJORINJURIES_PEDESTRIAN || 0) + (+d.MAJORINJURIES_BICYCLIST || 0);
+        var minorInjuries = (+d.MINORINJURIES_DRIVER || 0) + (+d.MINORINJURIES_PEDESTRIAN || 0) + (+d.MINORINJURIES_BICYCLIST || 0);
         if (injurySeverity === "high" && majorInjuries === 0) return false;
         if (injurySeverity === "low" && (majorInjuries > 0 || minorInjuries === 0)) return false;
         if (injurySeverity === "none" && (majorInjuries > 0 || minorInjuries > 0)) return false;
       }
       return true;
     });
-
-    // Convert filtered map data to GeoJSON features
+    
     var features = filteredMapData.map(function(d) {
-      var lat = parseFloat(d.LATITUDE);
-      var lng = parseFloat(d.LONGITUDE);
+      var lat = +d.LATITUDE, lng = +d.LONGITUDE;
       if (!isNaN(lat) && !isNaN(lng)) {
         return {
           "type": "Feature",
           "properties": d,
-          "geometry": {
-            "type": "Point",
-            "coordinates": [lng, lat]
-          }
+          "geometry": { "type": "Point", "coordinates": [lng, lat] }
         };
       }
-    }).filter(function(feature) { return feature !== undefined; });
-
-    var geojsonData = {
-      "type": "FeatureCollection",
-      "features": features
-    };
-
-    // Add the markers layer to the map on the markers pane
-    geoLayer = L.geoJSON(geojsonData, {
-      pane: 'markersPane',
+    }).filter(function(f) { return f !== undefined; });
+    
+    var geojsonData = { "type": "FeatureCollection", "features": features };
+    
+    markersCluster = L.markerClusterGroup({ pane: 'markersPane', showCoverageOnHover: false });
+    
+    var geojsonLayer = L.geoJSON(geojsonData, {
       pointToLayer: function(feature, latlng) {
-        return L.circleMarker(latlng, {
-          radius: 6,
-          className: 'marker'
-        });
+        return L.marker(latlng, { icon: crashIcon });
       },
       onEachFeature: function(feature, layer) {
-        var props = feature.properties;
-        var popupLines = [];
-        if (props.LATITUDE && props.LATITUDE.trim() !== "") {
-          popupLines.push("<strong>LATITUDE:</strong> " + props.LATITUDE);
-        }
-        if (props.LONGITUDE && props.LONGITUDE.trim() !== "") {
-          popupLines.push("<strong>LONGITUDE:</strong> " + props.LONGITUDE);
-        }
-        if (props.DATE && props.DATE.trim() !== "") {
-          popupLines.push("<strong>DATE:</strong> " + props.DATE);
-        }
-        if (props.ADDRESS && props.ADDRESS.trim() !== "") {
-          popupLines.push("<strong>ADDRESS:</strong> " + props.ADDRESS);
-        }
-        if (props.WARD && props.WARD.trim() !== "") {
-          popupLines.push("<strong>WARD:</strong> " + props.WARD);
-        }
+        var props = feature.properties, popupLines = [];
+        if (props.LATITUDE && props.LATITUDE.trim() !== "") { popupLines.push("<strong>LATITUDE:</strong> " + props.LATITUDE); }
+        if (props.LONGITUDE && props.LONGITUDE.trim() !== "") { popupLines.push("<strong>LONGITUDE:</strong> " + props.LONGITUDE); }
+        if (props.DATE && props.DATE.trim() !== "") { popupLines.push("<strong>DATE:</strong> " + props.DATE); }
+        if (props.ADDRESS && props.ADDRESS.trim() !== "") { popupLines.push("<strong>ADDRESS:</strong> " + props.ADDRESS); }
+        if (props.WARD && props.WARD.trim() !== "") { popupLines.push("<strong>WARD:</strong> " + props.WARD); }
         var skipFields = ["LATITUDE", "LONGITUDE", "DATE", "ADDRESS", "WARD", "XCOORD", "YCOORD"];
         for (var key in props) {
           if (skipFields.indexOf(key) === -1) {
             var value = props[key];
-            var numValue = parseFloat(value);
-            if (!isNaN(numValue) && numValue !== 0) {
+            if (!isNaN(+value) && +value !== 0) {
               popupLines.push("<strong>" + key + ":</strong> " + value);
             }
           }
@@ -282,87 +205,235 @@ document.addEventListener('DOMContentLoaded', function () {
         layer.on('click', function(e) {
           L.DomEvent.stopPropagation(e);
           map.setView(e.latlng, 18);
+          layer.openPopup();
         });
       }
-    }).addTo(map);
-
-    // For the bar chart, apply all filters except the year filter so all years appear
-    var chartFiltered = csvData.filter(function(d) {
+    });
+    markersCluster.addLayer(geojsonLayer);
+    map.addLayer(markersCluster);
+    
+    // Create separate filtered datasets for the charts:
+    // For the donut chart, we apply the year filter so it shows breakdown for the selected year (if any)
+    var chartFilteredForDonut = csvData.filter(function(d) {
+      if (selectYear.value && d.year !== selectYear.value) return false;
       if (selectWard.value && d.WARD !== selectWard.value) return false;
       if (checkboxFatalities.checked) {
-        var totalFatal = (parseFloat(d.FATAL_DRIVER) || 0) +
-                         (parseFloat(d.FATAL_PEDESTRIAN) || 0) +
-                         (parseFloat(d.FATAL_BICYCLIST) || 0);
+        var totalFatal = (+d.FATAL_DRIVER || 0) + (+d.FATAL_PEDESTRIAN || 0) + (+d.FATAL_BICYCLIST || 0);
         if (totalFatal === 0) return false;
       }
-      if (checkboxPedestrians.checked && (parseFloat(d.TOTAL_PEDESTRIANS) || 0) === 0) return false;
-      if (checkboxBicyclists.checked && (parseFloat(d.TOTAL_PEDESTRIQUES) || parseFloat(d.TOTAL_BICYCLES) || 0) === 0) return false;
+      if (checkboxPedestrians.checked && (+d.TOTAL_PEDESTRIANS || 0) === 0) return false;
+      if (checkboxBicyclists.checked && ((+d.TOTAL_PEDESTRIQUES) || (+d.TOTAL_BICYCLES) || 0) === 0) return false;
       if (selectInjury.value !== "all") {
-        var majorInjuries = (parseFloat(d.MAJORINJURIES_DRIVER) || 0) +
-                            (parseFloat(d.MAJORINJURIES_PEDESTRIAN) || 0) +
-                            (parseFloat(d.MAJORINJURIES_BICYCLIST) || 0);
-        var minorInjuries = (parseFloat(d.MINORINJURIES_DRIVER) || 0) +
-                            (parseFloat(d.MINORINJURIES_PEDESTRIAN) || 0) +
-                            (parseFloat(d.MINORINJURIES_BICYCLIST) || 0);
+        var majorInjuries = (+d.MAJORINJURIES_DRIVER || 0) + (+d.MAJORINJURIES_PEDESTRIAN || 0) + (+d.MAJORINJURIES_BICYCLIST || 0);
+        var minorInjuries = (+d.MINORINJURIES_DRIVER || 0) + (+d.MINORINJURIES_PEDESTRIAN || 0) + (+d.MINORINJURIES_BICYCLIST || 0);
         if (selectInjury.value === "high" && majorInjuries === 0) return false;
         if (selectInjury.value === "low" && (majorInjuries > 0 || minorInjuries === 0)) return false;
         if (selectInjury.value === "none" && (majorInjuries > 0 || minorInjuries > 0)) return false;
       }
       return true;
     });
-    updateBarChart(chartFiltered);
+    
+    // For the bar chart, we ignore the year filter so it shows trends across all years
+    var chartFilteredForBar = csvData.filter(function(d) {
+      if (selectWard.value && d.WARD !== selectWard.value) return false;
+      if (checkboxFatalities.checked) {
+        var totalFatal = (+d.FATAL_DRIVER || 0) + (+d.FATAL_PEDESTRIAN || 0) + (+d.FATAL_BICYCLIST || 0);
+        if (totalFatal === 0) return false;
+      }
+      if (checkboxPedestrians.checked && (+d.TOTAL_PEDESTRIANS || 0) === 0) return false;
+      if (checkboxBicyclists.checked && ((+d.TOTAL_PEDESTRIQUES) || (+d.TOTAL_BICYCLES) || 0) === 0) return false;
+      if (selectInjury.value !== "all") {
+        var majorInjuries = (+d.MAJORINJURIES_DRIVER || 0) + (+d.MAJORINJURIES_PEDESTRIAN || 0) + (+d.MAJORINJURIES_BICYCLIST || 0);
+        var minorInjuries = (+d.MINORINJURIES_DRIVER || 0) + (+d.MINORINJURIES_PEDESTRIAN || 0) + (+d.MINORINJURIES_BICYCLIST || 0);
+        if (selectInjury.value === "high" && majorInjuries === 0) return false;
+        if (selectInjury.value === "low" && (majorInjuries > 0 || minorInjuries === 0)) return false;
+        if (selectInjury.value === "none" && (majorInjuries > 0 || minorInjuries > 0)) return false;
+      }
+      return true;
+    });
+    
+    updateDonutChart(chartFilteredForDonut);
+    updateBarChart(chartFilteredForBar);
   }
-
-  // Function to update the D3 bar chart based on filtered data (ignoring the year filter)
+  
+  // Update the donut chart based on filtered data.
+  function updateDonutChart(filteredData) {
+    var severityCounts = { "Fatal": 0, "Major": 0, "Minor": 0, "None": 0 };
+    filteredData.forEach(function(d) {
+      var fatalCount = (+d.FATAL_DRIVER || 0) + (+d.FATAL_PEDESTRIAN || 0) + (+d.FATAL_BICYCLIST || 0);
+      var majorCount = (+d.MAJORINJURIES_DRIVER || 0) + (+d.MAJORINJURIES_PEDESTRIAN || 0) + (+d.MAJORINJURIES_BICYCLIST || 0);
+      var minorCount = (+d.MINORINJURIES_DRIVER || 0) + (+d.MINORINJURIES_PEDESTRIAN || 0) + (+d.MINORINJURIES_BICYCLIST || 0);
+      if (fatalCount > 0) { severityCounts["Fatal"] += 1; }
+      else if (majorCount > 0) { severityCounts["Major"] += 1; }
+      else if (minorCount > 0) { severityCounts["Minor"] += 1; }
+      else { severityCounts["None"] += 1; }
+    });
+  
+    var data = Object.keys(severityCounts).map(function(key) {
+      return { category: key, count: severityCounts[key] };
+    });
+  
+    var containerWidth = document.getElementById("donutChart").clientWidth;
+    var width = containerWidth, height = 300, radius = Math.min(width, height) / 2;
+    var topExtra = 50; // extra space at the top for the title
+  
+    // Remove any previous svg
+    d3.select("#donutChart").select("svg").remove();
+  
+    // Create an svg with extra height on top and adjust the viewBox accordingly
+    var svg = d3.select("#donutChart")
+                .append("svg")
+                .attr("width", "100%")
+                .attr("height", height + topExtra)
+                .attr("viewBox", "0 0 " + width + " " + (height + topExtra))
+                // Translate group down by half of topExtra to leave room for title
+                .append("g")
+                .attr("transform", "translate(" + (width/2) + "," + (height/2 + topExtra/2) + ")");
+  
+    var color = d3.scaleOrdinal()
+                  .domain(["Fatal", "Major", "Minor", "None"])
+                  .range(["#d73027", "#fc8d59", "#fee08b", "#91bfdb"]);
+  
+    var pie = d3.pie()
+                .sort(null)
+                .value(function(d) { return d.count; });
+  
+    var arc = d3.arc()
+                .innerRadius(radius * 0.5)
+                .outerRadius(radius * 0.8);
+  
+    var path = svg.selectAll("path")
+                  .data(pie(data))
+                  .enter().append("path")
+                  .attr("d", arc)
+                  .attr("fill", function(d) { return color(d.data.category); })
+                  .each(function(d) { this._current = d; });
+  
+    var tooltip = d3.select("body").select(".donut-tooltip");
+    if (tooltip.empty()) {
+      tooltip = d3.select("body").append("div")
+                  .attr("class", "donut-tooltip");
+    }
+  
+    path.on("mouseover", function(event, d) {
+          d3.select(this).transition().duration(200)
+            .attr("d", d3.arc().innerRadius(radius * 0.5).outerRadius(radius * 0.85));
+          tooltip.transition().duration(200).style("opacity", 0.9);
+          tooltip.html("Severity: " + d.data.category + "<br/>Total crashes: " + d.data.count)
+                 .style("left", (event.pageX + 10) + "px")
+                 .style("top", (event.pageY - 28) + "px");
+        })
+        .on("mousemove", function(event, d){
+          tooltip.style("left", (event.pageX + 10) + "px")
+                 .style("top", (event.pageY - 28) + "px");
+        })
+        .on("mouseout", function(d) {
+          d3.select(this).transition().duration(200).attr("d", arc);
+          tooltip.transition().duration(500).style("opacity", 0);
+        });
+  
+    // Create dynamic title based on selected year
+    var chartTitle = "Crash Severity Distribution";
+    if (selectYear.value) { chartTitle += " for " + selectYear.value; }
+  
+    // Append title at (0, -radius - offset)
+    svg.append("text")
+       .attr("x", 0)
+       .attr("y", -radius - 20)
+       .attr("fill", "#333")
+       .attr("text-anchor", "middle")
+       .style("font-size", "16px")
+       .text(chartTitle);
+  }
+  
+  
+  // Update the bar chart based on filtered data.
   function updateBarChart(filteredData) {
-    // Aggregate data for every year from the complete list of years
+    var containerWidth = document.getElementById("barChart").clientWidth;
+    var margin = { top: 20, right: 20, bottom: 40, left: 50 },
+        width = containerWidth - margin.left - margin.right,
+        height = 300 - margin.top - margin.bottom;
+    
+    d3.select("#barChart").select("svg").remove();
+    
+    var svg = d3.select("#barChart")
+                .append("svg")
+                .attr("width", "100%")
+                .attr("height", height + margin.top + margin.bottom)
+                .attr("viewBox", "0 0 " + (width + margin.left + margin.right) + " " + (height + margin.top + margin.bottom))
+                .append("g")
+                .attr("transform", "translate(" + margin.left + "," + margin.top + ")");
+    
     var aggregated = allYears.map(function(year) {
       var count = filteredData.filter(function(d) { return d.year === year; }).length;
       return { year: +year, count: count };
     });
     aggregated.sort(function(a, b) { return a.year - b.year; });
-    var margin = { top: 20, right: 20, bottom: 30, left: 50 },
-        width = 500 - margin.left - margin.right,
-        height = 300 - margin.top - margin.bottom;
-    d3.select("#barChart").remove();
-    var svg = d3.select("#controls")
-      .append("svg")
-      .attr("id", "barChart")
-      .attr("width", width + margin.left + margin.right)
-      .attr("height", height + margin.top + margin.bottom)
-      .append("g")
-      .attr("transform", "translate(" + margin.left + "," + margin.top + ")");
+    
     var x = d3.scaleBand()
       .domain(aggregated.map(function(d) { return d.year; }))
       .range([0, width])
       .padding(0.1);
+    
     var y = d3.scaleLinear()
       .domain([0, d3.max(aggregated, function(d) { return d.count; })]).nice()
       .range([height, 0]);
+    
     svg.append("g")
-      .attr("transform", "translate(0," + height + ")")
-      .call(d3.axisBottom(x).tickFormat(d3.format("d")));
-    svg.append("g")
-      .call(d3.axisLeft(y));
-    svg.selectAll(".bar")
-      .data(aggregated)
-      .enter().append("rect")
-      .attr("class", "bar")
-      .attr("x", function(d) { return x(d.year); })
-      .attr("y", function(d) { return y(d.count); })
-      .attr("width", x.bandwidth())
-      .attr("height", function(d) { return height - y(d.count); })
-      .attr("fill", "steelblue");
+       .attr("transform", "translate(0," + height + ")")
+       .call(d3.axisBottom(x).tickFormat(d3.format("d")));
+    
     svg.append("text")
-      .attr("x", width / 2)
-      .attr("y", -5)
-      .attr("text-anchor", "middle")
-      .style("font-size", "14px")
-      .text("Crash Count by Year");
+       .attr("x", width / 2)
+       .attr("y", height + margin.bottom - 5)
+       .attr("text-anchor", "middle")
+       .attr("fill", "#000")
+       .style("font-size", "12px")
+       .text("Year");
+    
+    svg.append("g")
+       .call(d3.axisLeft(y));
+    
+    var bars = svg.selectAll(".bar")
+                  .data(aggregated)
+                  .enter().append("rect")
+                  .attr("class", "bar")
+                  .attr("x", function(d) { return x(d.year); })
+                  .attr("y", function(d) { return y(d.count); })
+                  .attr("width", x.bandwidth())
+                  .attr("height", function(d) { return height - y(d.count); })
+                  .attr("fill", "steelblue");
+    
+    var barTooltip = d3.select("body").select(".bar-tooltip");
+    if (barTooltip.empty()) {
+      barTooltip = d3.select("body").append("div")
+                     .attr("class", "bar-tooltip");
+    }
+    
+    bars.on("mouseover", function(event, d) {
+            barTooltip.transition().duration(200).style("opacity", 0.9);
+            barTooltip.html("Total crashes: " + d.count)
+                      .style("left", (event.pageX + 10) + "px")
+                      .style("top", (event.pageY - 28) + "px");
+          })
+          .on("mousemove", function(event, d){
+            barTooltip.style("left", (event.pageX + 10) + "px")
+                      .style("top", (event.pageY - 28) + "px");
+          })
+          .on("mouseout", function(d) {
+            barTooltip.transition().duration(500).style("opacity", 0);
+          });
+    
+    svg.append("text")
+       .attr("x", width / 2)
+       .attr("y", -5)
+       .attr("text-anchor", "middle")
+       .style("font-size", "14px")
+       .text("Crash Count by Year");
   }
-
-  // Listen for changes on each filter control to update the map and chart
-  [selectYear, selectWard, checkboxFatalities, checkboxPedestrians, checkboxBicyclists, selectInjury].forEach(function(control) {
-    control.addEventListener("change", updateMap);
+  
+  [selectYear, selectWard, checkboxFatalities, checkboxPedestrians, checkboxBicyclists, selectInjury]
+    .forEach(function(control) {
+      control.addEventListener("change", updateMap);
   });
 });
