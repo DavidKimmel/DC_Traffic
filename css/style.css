@@ -5,24 +5,19 @@ html, body {
     margin: 0;
     padding: 0;
   }
-  
-  /* If you want the entire dashboard row to fill the viewport height minus header */
   .row.full-height {
-    height: calc(100vh - 120px); /* adjust 120px to account for header height and margins */
+    height: calc(100vh - 120px); /* Adjust as needed */
   }
-  
-  /* Map container fills its column */
   #mapContainer, #map {
     height: 100%;
   }
-  
   /* Header Styling */
   header {
     background-color: #fff;
-    padding: 10px;
-    margin-bottom: 10px;
+    padding: 0px;
+    margin-bottom: 0px;
     border-bottom: 2px solid #ddd;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
   }
   header h1 {
     font-size: 2em;
@@ -31,11 +26,11 @@ html, body {
   
   /* Map Container Styling */
   #mapContainer {
-    padding: 10px;
+    padding: 5px;
     background-color: #fff;
     border: 1px solid #ddd;
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
-    margin-bottom: 20px;
+    margin-bottom: 10px;
   }
   
   /* Dashboard Column Styling */
@@ -46,11 +41,11 @@ html, body {
   /* Card Styling for Dashboard Elements */
   .card {
     background-color: #fff;
-    padding: 15px;
+    padding: 0px;
     border: 1px solid #ddd;
     border-radius: 4px;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-    margin-bottom: 20px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+    margin-bottom: 0px;
   }
   
   /* Filter Controls Styling */
@@ -84,7 +79,7 @@ html, body {
     border-radius: 4px;
   }
   
-  /* Optional: Cluster Marker Styling */
+  /* Cluster Marker Styling */
   .leaflet-marker-icon.marker-cluster div {
     transition: transform 0.2s ease;
     transform-origin: center;

@@ -26,12 +26,51 @@
           Explore crash data in Washington DC with interactive filtering and dynamic visualizations.
         </p>
       </header>
-      <div class="row full-height">
-        <div class="col-md-7" id="mapContainer">
-          <div id="map"></div>
+      
+      <!-- KPI Cards Section (New Row) -->
+      <div class="row mb-3" id="kpiCards">
+        <div class="col-md-3">
+          <div class="card text-center">
+            <div class="card-body">
+              <h5 class="card-title" id="totalCrashes">0</h5>
+              <p class="card-text">Total Crashes</p>
+            </div>
+          </div>
         </div>
-        <!-- Dashboard Column -->
-        <div class="col-md-5" id="dashboard">
+        <div class="col-md-3">
+          <div class="card text-center">
+            <div class="card-body">
+              <h5 class="card-title" id="fatalCrashes">0</h5>
+              <p class="card-text">Fatal Crashes</p>
+            </div>
+          </div>
+        </div>
+        <div class="col-md-3">
+          <div class="card text-center">
+            <div class="card-body">
+              <h5 class="card-title" id="majorInjuries">0</h5>
+              <p class="card-text">Crashes with Major Injuries</p>
+            </div>
+          </div>
+        </div>
+        <div class="col-md-3">
+          <div class="card text-center">
+            <div class="card-body">
+              <h5 class="card-title" id="percChange">N/A</h5>
+              <p class="card-text">Change from Previous Year</p>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <!-- Main Dashboard Row -->
+      <div class="row full-height d-flex align-items-stretch">
+        <!-- Map Column -->
+        <div class="col-md-7" id="mapContainer">
+          <div id="map" class="h-100"></div>
+        </div>
+        <!-- Dashboard (Filters and Charts) Column -->
+        <div class="col-md-5 d-flex flex-column" id="dashboard">
           <!-- Filter Controls Card -->
           <div class="card mb-3">
             <div class="card-body" id="filters">
@@ -45,14 +84,16 @@
             </div>
           </div>
           <!-- Bar Chart Card -->
-          <div class="card mb-3">
+          <div class="card mb-3 flex-grow-1">
             <div class="card-body" id="barChart">
               <!-- Bar chart will be rendered by main.js -->
             </div>
           </div>
         </div>
       </div>
-    </div>
+
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <!-- Bootstrap Bundle JS (includes Popper) -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <!-- Leaflet JS -->

@@ -54,6 +54,14 @@ document.addEventListener('DOMContentLoaded', function () {
     <label><input type="checkbox" id="bicyclistFilter"> Bicyclist Involved</label>
     &nbsp;&nbsp;
   `;
+  // Create and append the Export button below the filters.
+  var exportButton = document.createElement("button");
+  exportButton.id = "exportDataButton";
+  exportButton.innerText = "Export Data";
+  exportButton.className = "btn btn-primary mt-2";  // Using Bootstrap classes for styling.
+  filtersDiv.appendChild(exportButton);
+  exportButton.addEventListener("click", exportData);
+
   
   var selectYear = document.getElementById("yearFilter");
   var selectWard = document.getElementById("wardFilter");
@@ -61,6 +69,122 @@ document.addEventListener('DOMContentLoaded', function () {
   var checkboxPedestrians = document.getElementById("pedestrianFilter");
   var checkboxBicyclists = document.getElementById("bicyclistFilter");
   var selectInjury = document.getElementById("injuryFilter");
+
+
+  function exportData() {
+    // Retrieve filter values from existing controls.
+    var selectedYearVal = selectYear.value;
+    var selectedWardVal = selectWard.value;
+    var fatalitiesOnly = checkboxFatalities.checked;
+    var pedestrianOnly = checkboxPedestrians.checked;
+    var bicyclistOnly = checkboxBicyclists.checked;
+    var injurySeverity = selectInjury.value;
+  
+    // Filter the CSV data just like in updateMap.
+    var filteredData = csvData.filter(function(d) {
+      if (selectedYearVal && d.year !== selectedYearVal) return false;
+      if (selectedWardVal && d.WARD !== selectedWardVal) return false;
+      if (fatalitiesOnly) {
+        var totalFatal = (+d.FATAL_DRIVER || 0) + (+d.FATAL_PEDESTRIAN || 0) + (+d.FATAL_BICYCLIST || 0);
+        if (totalFatal === 0) return false;
+      }
+      if (pedestrianOnly && (+d.TOTAL_PEDESTRIANS || 0) === 0) return false;
+      if (bicyclistOnly && ((+d.TOTAL_PEDESTRIQUES) || (+d.TOTAL_BICYCLES) || 0) === 0) return false;
+      if (injurySeverity !== "all") {
+        var majorInjuries = (+d.MAJORINJURIES_DRIVER || 0) + (+d.MAJORINJURIES_PEDESTRIAN || 0) + (+d.MAJORINJURIES_BICYCLIST || 0);
+        var minorInjuries = (+d.MINORINJURIES_DRIVER || 0) + (+d.MINORINJURIES_PEDESTRIAN || 0) + (+d.MINORINJURIES_BICYCLIST || 0);
+        if (injurySeverity === "high" && majorInjuries === 0) return false;
+        if (injurySeverity === "low" && (majorInjuries > 0 || minorInjuries === 0)) return false;
+        if (injurySeverity === "none" && (majorInjuries > 0 || minorInjuries > 0)) return false;
+      }
+      return true;
+    });
+  
+    // Create a new workbook and worksheet using SheetJS.
+    var wb = XLSX.utils.book_new();
+    // Convert the filtered data (an array of objects) to a worksheet.
+    var ws = XLSX.utils.json_to_sheet(filteredData);
+    // Append the worksheet to the workbook.
+    XLSX.utils.book_append_sheet(wb, ws, "Filtered Data");
+    // Trigger a download of the file.
+    XLSX.writeFile(wb, "filtered_crash_data.xlsx");
+  }
+  
+  function updateKPICards(filteredData) {
+    // Compute Total Crashes from the filtered dataset.
+    var totalCrashes = filteredData.length;
+  
+    // Compute Fatal Crashes: count records where any fatality (driver, pedestrian, or bicyclist) is greater than 0.
+    var fatalCrashes = filteredData.filter(function(d) {
+      var totalFatal = (+d.FATAL_DRIVER || 0) + (+d.FATAL_PEDESTRIAN || 0) + (+d.FATAL_BICYCLIST || 0);
+      return totalFatal > 0;
+    }).length;
+  
+    // Compute Crashes with Major Injuries.
+    var majorInjuryCrashes = filteredData.filter(function(d) {
+      var majorCount = (+d.MAJORINJURIES_DRIVER || 0) + (+d.MAJORINJURIES_PEDESTRIAN || 0) + (+d.MAJORINJURIES_BICYCLIST || 0);
+      return majorCount > 0;
+    }).length;
+  
+    // Compute Percentage Change from Previous Year.
+    var percChangeText = "N/A";
+    
+    if (selectYear.value) {
+      // When a specific year filter is applied, compare that year against its previous year.
+      var selectedYear = parseInt(selectYear.value);
+      var previousYear = selectedYear - 1;
+      // Compute previous year's count using csvData (apply all filter criteria except the year)
+      var previousYearData = csvData.filter(function(d) {
+        // Use the same filter criteria as in updateMap but for the previous year.
+        if (selectWard.value && d.WARD !== selectWard.value) return false;
+        if (checkboxFatalities.checked) {
+          var totalFatal = (+d.FATAL_DRIVER || 0) + (+d.FATAL_PEDESTRIAN || 0) + (+d.FATAL_BICYCLIST || 0);
+          if (totalFatal === 0) return false;
+        }
+        if (checkboxPedestrians.checked && (+d.TOTAL_PESTRIANS || 0) === 0) return false;
+        if (checkboxBicyclists.checked && ((+d.TOTAL_PESTRIQUES) || (+d.TOTAL_BICYCLES) || 0) === 0) return false;
+        if (selectInjury.value !== "all") {
+          var majorInjuries = (+d.MAJORINJURIES_DRIVER || 0) + (+d.MAJORINJURIES_PEDESTRIAN || 0) + (+d.MAJORINJURIES_BICYCLIST || 0);
+          var minorInjuries = (+d.MINORINJURIES_DRIVER || 0) + (+d.MINORINJURIES_PEDESTRIAN || 0) + (+d.MINORINJURIES_BICYCLIST || 0);
+          if (selectInjury.value === "high" && majorInjuries === 0) return false;
+          if (selectInjury.value === "low" && (majorInjuries > 0 || minorInjuries === 0)) return false;
+          if (selectInjury.value === "none" && (majorInjuries > 0 || minorInjuries > 0)) return false;
+        }
+        return d.year === String(previousYear);
+      });
+      
+      // current filteredData should consist of records for the selected year.
+      if (previousYearData.length > 0) {
+        var change = ((filteredData.length - previousYearData.length) / previousYearData.length) * 100;
+        percChangeText = change.toFixed(1) + "%";
+      } else {
+        percChangeText = "N/A";
+      }
+    } else {
+      // When no specific year is selected, group filteredData by year and compare the two most recent years.
+      var yearCounts = {};
+      filteredData.forEach(function(d) {
+        var yr = d.year;
+        yearCounts[yr] = (yearCounts[yr] || 0) + 1;
+      });
+      var yearsArr = Object.keys(yearCounts).sort();
+      if (yearsArr.length >= 2) {
+        var lastYear = yearsArr[yearsArr.length - 1];
+        var secondLastYear = yearsArr[yearsArr.length - 2];
+        var change = ((yearCounts[lastYear] - yearCounts[secondLastYear]) / yearCounts[secondLastYear]) * 100;
+        percChangeText = change.toFixed(1) + "%";
+      }
+    }
+    
+    // Update the KPI card elements with computed values.
+    document.getElementById("totalCrashes").innerText = totalCrashes;
+    document.getElementById("fatalCrashes").innerText = fatalCrashes;
+    document.getElementById("majorInjuries").innerText = majorInjuryCrashes;
+    document.getElementById("percChange").innerText = percChangeText;
+  }
+  
+  
+
   
   d3.csv("data/crash.csv").then(function(data) {
     csvData = data;
@@ -94,7 +218,7 @@ document.addEventListener('DOMContentLoaded', function () {
       selectWard.appendChild(option);
     });
     
-    // Optionally set a default year (if desired)
+    // Optionally set a default year 
     if (years.has("2025")) { selectYear.value = "2025"; }
     updateMap();
   }).catch(function(error) {
@@ -254,10 +378,11 @@ document.addEventListener('DOMContentLoaded', function () {
     
     updateDonutChart(chartFilteredForDonut);
     updateBarChart(chartFilteredForBar);
+    updateKPICards(chartFilteredForDonut);
   }
   
-  // Update the donut chart based on filtered data.
   function updateDonutChart(filteredData) {
+    // Compute severity counts.
     var severityCounts = { "Fatal": 0, "Major": 0, "Minor": 0, "None": 0 };
     filteredData.forEach(function(d) {
       var fatalCount = (+d.FATAL_DRIVER || 0) + (+d.FATAL_PEDESTRIAN || 0) + (+d.FATAL_BICYCLIST || 0);
@@ -273,164 +398,202 @@ document.addEventListener('DOMContentLoaded', function () {
       return { category: key, count: severityCounts[key] };
     });
   
-    var containerWidth = document.getElementById("donutChart").clientWidth;
-    var width = containerWidth, height = 300, radius = Math.min(width, height) / 2;
-    var topExtra = 50; // extra space at the top for the title
+    // Fixed dimensions: use a fixed height (e.g., 300px) so it matches the bar chart.
+    var container = document.getElementById("donutChart");
+    var containerWidth = container.clientWidth;
+    var height = 300; // fixed height
+    var topExtra = 30; // reserve space for title
+    var width = containerWidth; // full container width
+    var radius = Math.min(width, height - topExtra) / 2; // effective donut radius
   
-    // Remove any previous svg
+    // Remove any previous svg.
     d3.select("#donutChart").select("svg").remove();
   
-    // Create an svg with extra height on top and adjust the viewBox accordingly
+    // Create the svg element.
     var svg = d3.select("#donutChart")
                 .append("svg")
                 .attr("width", "100%")
-                .attr("height", height + topExtra)
-                .attr("viewBox", "0 0 " + width + " " + (height + topExtra))
-                // Translate group down by half of topExtra to leave room for title
+                .attr("height", height)
+                .attr("viewBox", "0 0 " + width + " " + height)
                 .append("g")
-                .attr("transform", "translate(" + (width/2) + "," + (height/2 + topExtra/2) + ")");
+                // Position the donut in the center, shifting vertically to account for the title.
+                .attr("transform", "translate(" + width / 2 + "," + ((height - topExtra) / 2 + topExtra) + ")");
   
+    // Color scale remains as before.
     var color = d3.scaleOrdinal()
                   .domain(["Fatal", "Major", "Minor", "None"])
                   .range(["#d73027", "#fc8d59", "#fee08b", "#91bfdb"]);
   
+    // Pie layout.
     var pie = d3.pie()
                 .sort(null)
                 .value(function(d) { return d.count; });
   
+    // Adjust the arc so the donut fills more of the space.
     var arc = d3.arc()
                 .innerRadius(radius * 0.5)
                 .outerRadius(radius * 0.8);
   
+    // Append the donut arcs.
     var path = svg.selectAll("path")
                   .data(pie(data))
-                  .enter().append("path")
+                  .enter()
+                  .append("path")
                   .attr("d", arc)
                   .attr("fill", function(d) { return color(d.data.category); })
                   .each(function(d) { this._current = d; });
   
+    // Setup tooltip.
     var tooltip = d3.select("body").select(".donut-tooltip");
     if (tooltip.empty()) {
       tooltip = d3.select("body").append("div")
                   .attr("class", "donut-tooltip");
     }
-  
     path.on("mouseover", function(event, d) {
-          d3.select(this).transition().duration(200)
-            .attr("d", d3.arc().innerRadius(radius * 0.5).outerRadius(radius * 0.85));
-          tooltip.transition().duration(200).style("opacity", 0.9);
-          tooltip.html("Severity: " + d.data.category + "<br/>Total crashes: " + d.data.count)
-                 .style("left", (event.pageX + 10) + "px")
-                 .style("top", (event.pageY - 28) + "px");
-        })
-        .on("mousemove", function(event, d){
-          tooltip.style("left", (event.pageX + 10) + "px")
-                 .style("top", (event.pageY - 28) + "px");
-        })
-        .on("mouseout", function(d) {
-          d3.select(this).transition().duration(200).attr("d", arc);
-          tooltip.transition().duration(500).style("opacity", 0);
-        });
+           d3.select(this).transition().duration(200)
+             .attr("d", d3.arc().innerRadius(radius * 0.5).outerRadius(radius * 0.85));
+           tooltip.transition().duration(200).style("opacity", 0.9);
+           tooltip.html("Severity: " + d.data.category + "<br/>Total crashes: " + d.data.count)
+                  .style("left", (event.pageX + 10) + "px")
+                  .style("top", (event.pageY - 28) + "px");
+         })
+         .on("mousemove", function(event, d) {
+           tooltip.style("left", (event.pageX + 10) + "px")
+                  .style("top", (event.pageY - 28) + "px");
+         })
+         .on("mouseout", function(event, d) {
+           d3.select(this).transition().duration(200)
+             .attr("d", arc);
+           tooltip.transition().duration(500).style("opacity", 0);
+         });
   
-    // Create dynamic title based on selected year
+    // Append chart title above the donut.
     var chartTitle = "Crash Severity Distribution";
-    if (selectYear.value) { chartTitle += " for " + selectYear.value; }
-  
-    // Append title at (0, -radius - offset)
+    if (selectYear.value) {
+      chartTitle += " for " + selectYear.value;
+    }
     svg.append("text")
        .attr("x", 0)
-       .attr("y", -radius - 20)
+       .attr("y", -radius - 10)  // place title just above the donut
        .attr("fill", "#333")
        .attr("text-anchor", "middle")
        .style("font-size", "16px")
        .text(chartTitle);
   }
+    
   
-  
-  // Update the bar chart based on filtered data.
-  function updateBarChart(filteredData) {
-    var containerWidth = document.getElementById("barChart").clientWidth;
-    var margin = { top: 20, right: 20, bottom: 40, left: 50 },
-        width = containerWidth - margin.left - margin.right,
-        height = 300 - margin.top - margin.bottom;
-    
-    d3.select("#barChart").select("svg").remove();
-    
-    var svg = d3.select("#barChart")
-                .append("svg")
-                .attr("width", "100%")
-                .attr("height", height + margin.top + margin.bottom)
-                .attr("viewBox", "0 0 " + (width + margin.left + margin.right) + " " + (height + margin.top + margin.bottom))
-                .append("g")
-                .attr("transform", "translate(" + margin.left + "," + margin.top + ")");
-    
-    var aggregated = allYears.map(function(year) {
-      var count = filteredData.filter(function(d) { return d.year === year; }).length;
-      return { year: +year, count: count };
-    });
-    aggregated.sort(function(a, b) { return a.year - b.year; });
-    
-    var x = d3.scaleBand()
-      .domain(aggregated.map(function(d) { return d.year; }))
-      .range([0, width])
-      .padding(0.1);
-    
-    var y = d3.scaleLinear()
-      .domain([0, d3.max(aggregated, function(d) { return d.count; })]).nice()
-      .range([height, 0]);
-    
-    svg.append("g")
-       .attr("transform", "translate(0," + height + ")")
-       .call(d3.axisBottom(x).tickFormat(d3.format("d")));
-    
-    svg.append("text")
-       .attr("x", width / 2)
-       .attr("y", height + margin.bottom - 5)
-       .attr("text-anchor", "middle")
-       .attr("fill", "#000")
-       .style("font-size", "12px")
-       .text("Year");
-    
-    svg.append("g")
-       .call(d3.axisLeft(y));
-    
-    var bars = svg.selectAll(".bar")
-                  .data(aggregated)
-                  .enter().append("rect")
-                  .attr("class", "bar")
-                  .attr("x", function(d) { return x(d.year); })
-                  .attr("y", function(d) { return y(d.count); })
-                  .attr("width", x.bandwidth())
-                  .attr("height", function(d) { return height - y(d.count); })
-                  .attr("fill", "steelblue");
-    
-    var barTooltip = d3.select("body").select(".bar-tooltip");
-    if (barTooltip.empty()) {
-      barTooltip = d3.select("body").append("div")
-                     .attr("class", "bar-tooltip");
-    }
-    
-    bars.on("mouseover", function(event, d) {
-            barTooltip.transition().duration(200).style("opacity", 0.9);
-            barTooltip.html("Total crashes: " + d.count)
-                      .style("left", (event.pageX + 10) + "px")
-                      .style("top", (event.pageY - 28) + "px");
-          })
-          .on("mousemove", function(event, d){
-            barTooltip.style("left", (event.pageX + 10) + "px")
-                      .style("top", (event.pageY - 28) + "px");
-          })
-          .on("mouseout", function(d) {
-            barTooltip.transition().duration(500).style("opacity", 0);
-          });
-    
-    svg.append("text")
-       .attr("x", width / 2)
-       .attr("y", -5)
-       .attr("text-anchor", "middle")
-       .style("font-size", "14px")
-       .text("Crash Count by Year");
+// Update the bar chart based on filtered data.
+function updateBarChart(filteredData) {
+  var containerWidth = document.getElementById("barChart").clientWidth;
+  var margin = { top: 20, right: 20, bottom: 40, left: 50 },
+      width = containerWidth - margin.left - margin.right,
+      height = 300 - margin.top - margin.bottom;
+
+  // Remove any previous svg element
+  d3.select("#barChart").select("svg").remove();
+
+  // Create svg element in the bar chart container
+  var svg = d3.select("#barChart")
+              .append("svg")
+              .attr("width", "100%")
+              .attr("height", height + margin.top + margin.bottom)
+              .attr("viewBox", "0 0 " + (width + margin.left + margin.right) + " " + (height + margin.top + margin.bottom))
+              .append("g")
+              .attr("transform", "translate(" + margin.left + "," + margin.top + ")");
+
+  // Aggregate crash counts per year.
+  var aggregated = allYears.map(function(year) {
+    var count = filteredData.filter(function(d) { return d.year === year; }).length;
+    return { year: +year, count: count };
+  });
+  aggregated.sort(function(a, b) { return a.year - b.year; });
+
+  // X-scale for years.
+  var x = d3.scaleBand()
+            .domain(aggregated.map(function(d) { return d.year; }))
+            .range([0, width])
+            .padding(0.1);
+
+  // Y-scale for crash counts.
+  var y = d3.scaleLinear()
+            .domain([0, d3.max(aggregated, function(d) { return d.count; })]).nice()
+            .range([height, 0]);
+
+  // Create a linear color scale for the bars.
+  // Lower counts map to a light bluish-gray, higher counts to a deep blue.
+  var countExtent = d3.extent(aggregated, function(d) { return d.count; });
+  var colorCount = d3.scaleLinear()
+                     .domain(countExtent)  // [minCount, maxCount]
+                     .range(["#bdc3c7", "#2c3e50"]);
+
+  // Render the X-axis.
+  svg.append("g")
+     .attr("transform", "translate(0," + height + ")")
+     .call(d3.axisBottom(x).tickFormat(d3.format("d")));
+
+  // X-axis label.
+  svg.append("text")
+     .attr("x", width / 2)
+     .attr("y", height + margin.bottom - 5)
+     .attr("text-anchor", "middle")
+     .attr("fill", "#000")
+     .style("font-size", "12px")
+     .text("Year");
+
+  // Render the Y-axis.
+  svg.append("g")
+     .call(d3.axisLeft(y));
+
+  // Create (or update) the tooltip for the bar chart.
+  var barTooltip = d3.select("body").select(".bar-tooltip");
+  if (barTooltip.empty()) {
+    barTooltip = d3.select("body").append("div")
+                   .attr("class", "bar-tooltip");
   }
+
+  // Append the bars using the aggregated data.
+  var bars = svg.selectAll(".bar")
+                .data(aggregated)
+                .enter().append("rect")
+                .attr("class", "bar")
+                .attr("x", function(d) { return x(d.year); })
+                .attr("y", function(d) { return y(d.count); })
+                .attr("width", x.bandwidth())
+                .attr("height", function(d) { return height - y(d.count); })
+                .attr("fill", function(d) { return colorCount(d.count); })
+                // Adding rounded corners for a smoother look:
+                .attr("rx", 3)
+                // Mouseover to brighten the color slightly
+                .on("mouseover", function(event, d) {
+                  d3.select(this)
+                    .transition().duration(200)
+                    .attr("fill", d3.rgb(colorCount(d.count)).brighter(0.5));
+                  barTooltip.transition().duration(200).style("opacity", 0.9);
+                  barTooltip.html("Total crashes: " + d.count)
+                            .style("left", (event.pageX + 10) + "px")
+                            .style("top", (event.pageY - 28) + "px");
+                })
+                .on("mousemove", function(event, d) {
+                  barTooltip.style("left", (event.pageX + 10) + "px")
+                            .style("top", (event.pageY - 28) + "px");
+                })
+                .on("mouseout", function(event, d) {
+                  d3.select(this)
+                    .transition().duration(200)
+                    .attr("fill", colorCount(d.count));
+                  barTooltip.transition().duration(500).style("opacity", 0);
+                });
+
+  // Add chart title.
+  svg.append("text")
+     .attr("x", width / 2)
+     .attr("y", -5)
+     .attr("text-anchor", "middle")
+     .style("font-size", "14px")
+     .text("Crash Count by Year");
+}
+
+
   
   [selectYear, selectWard, checkboxFatalities, checkboxPedestrians, checkboxBicyclists, selectInjury]
     .forEach(function(control) {
