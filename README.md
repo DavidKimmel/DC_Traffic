@@ -70,15 +70,8 @@ The DC Traffic Crash Dashboard provides:
    - Bar chart displays crash counts by year, shaded by count intensity.
 5. **Export your filtered dataset** by clicking the **Export Data** button—an `.xlsx` file will be downloaded.
 
-## 📈 Use Case Example
-Transportation Planner Gabe Rivera investigating crash hotspots:
-1. Selects **2025**, **Ward 7**, and toggles **Fatalities** + **Pedestrian** filters.
-2. Map and charts update to highlight critical incidents and rising fatality trends.
-3. Exports data for an in-depth safety report to senior management.
 
-## 🤝 Contributing
-Contributions are welcome! Please open an issue or submit a pull request with your improvements.
 
-## 📄 License
-This project is licensed under the MIT License. See [LICENSE](LICENSE) for details.
+
+
 
