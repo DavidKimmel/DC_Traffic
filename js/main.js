@@ -10,7 +10,7 @@ document.addEventListener('DOMContentLoaded', function () {
   
   // Crash Icon
   var crashIcon = L.icon({
-    iconUrl: 'img/crash.png',  // update the path as needed
+    iconUrl: 'img/crash.png',  
     iconSize: [40, 50],
     iconAnchor: [15, 15],
     popupAnchor: [0, -15]
@@ -191,7 +191,7 @@ document.addEventListener('DOMContentLoaded', function () {
     csvData.forEach(function(d) {
       d.year = d.DATE.substring(0, 4);
     });
-    // Filter out records from 2018
+    // Filter out records from 2018 (This file was very big had to pair it down then filter 2018 because it had partial data left)
     csvData = csvData.filter(function(d) { return d.year !== "2018"; });
     
     var years = new Set(csvData.map(function(d) { return d.year; }));
